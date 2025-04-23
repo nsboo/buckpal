@@ -1,6 +1,6 @@
 package io.reflectoring.buckpal.application.domain.service;
 
-import io.reflectoring.buckpal.application.port.in.SendMoneyCommand;
+import io.reflectoring.buckpal.application.port.in.SendMoneyInfo;
 import io.reflectoring.buckpal.application.port.in.SendMoneyUseCase;
 import io.reflectoring.buckpal.application.port.out.AccountLock;
 import io.reflectoring.buckpal.application.port.out.LoadAccountPort;
@@ -24,18 +24,18 @@ public class SendMoneyService implements SendMoneyUseCase {
 	private final MoneyTransferProperties moneyTransferProperties;
 
 	@Override
-	public boolean sendMoney(SendMoneyCommand command) {
+	public boolean sendMoney(SendMoneyInfo info) {
 
-		checkThreshold(command);
+		checkThreshold(info);
 
 		LocalDateTime baselineDate = LocalDateTime.now().minusDays(10);
 
 		Account sourceAccount = loadAccountPort.loadAccount(
-				command.sourceAccountId(),
+				info.sourceAccountId(),
 				baselineDate);
 
 		Account targetAccount = loadAccountPort.loadAccount(
-				command.targetAccountId(),
+				info.targetAccountId(),
 				baselineDate);
 
 		AccountId sourceAccountId = sourceAccount.getId()
@@ -44,13 +44,13 @@ public class SendMoneyService implements SendMoneyUseCase {
 				.orElseThrow(() -> new IllegalStateException("expected target account ID not to be empty"));
 
 		accountLock.lockAccount(sourceAccountId);
-		if (!sourceAccount.withdraw(command.money(), targetAccountId)) {
+		if (!sourceAccount.withdraw(info.money(), targetAccountId)) {
 			accountLock.releaseAccount(sourceAccountId);
 			return false;
 		}
 
 		accountLock.lockAccount(targetAccountId);
-		if (!targetAccount.deposit(command.money(), sourceAccountId)) {
+		if (!targetAccount.deposit(info.money(), sourceAccountId)) {
 			accountLock.releaseAccount(sourceAccountId);
 			accountLock.releaseAccount(targetAccountId);
 			return false;
@@ -64,9 +64,9 @@ public class SendMoneyService implements SendMoneyUseCase {
 		return true;
 	}
 
-	private void checkThreshold(SendMoneyCommand command) {
-		if(command.money().isGreaterThan(moneyTransferProperties.getMaximumTransferThreshold())){
-			throw new ThresholdExceededException(moneyTransferProperties.getMaximumTransferThreshold(), command.money());
+	private void checkThreshold(SendMoneyInfo info) {
+		if(info.money().isGreaterThan(moneyTransferProperties.getMaximumTransferThreshold())){
+			throw new ThresholdExceededException(moneyTransferProperties.getMaximumTransferThreshold(), info.money());
 		}
 	}
 
